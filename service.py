@@ -36,38 +36,63 @@ import lazy_tools   as T
 
 api = TheTVDB()
 
-all_show_ids	       = {"jsonrpc": "2.0",
+QUERY_all_show_ids	    = {"jsonrpc": "2.0",
 						"method": "VideoLibrary.GetTVShows",
 						"params": {
 							"properties": 
-								["title", "lastplayed"]},
+								["title"]},
 						"id": "1"}
 
+QUERY_all_episodes      = {"jsonrpc": "2.0",
+						"method": "VideoLibrary.GetEpisodes",
+						"params": {
+							"properties": 
+								["season","episode","playcount","file"],
+							"tvshowid": "1"},
+						"id": "1"}
+
+QUERY_rescan			 = {"jsonrpc": "2.0",
+							"method": "VideoLibrary.Scan",
+							"params": {
+								"directory": "PLACEHOLDER",
+								"media": "video"},
+							"id": 1
+							}
+
+
 # query all all_shows 
-all_shows = T.json_query(all_show_ids)
+all_shows = T.json_query(QUERY_all_show_ids)
 
 all_shows = all_shows.get('tvshows', [])
 
+print str(all_shows)
+
 for show in all_shows:
 
-	name = show.get('title', '')
+	idx = show.get('tvshowid', '')
 
-	show_tup = api.get_matching_shows(name)
+	QUERY_all_episodes['params']['tvshowid'] = idx
 
-	print show_tup
+	all_shows = T.json_query(QUERY_all_episodes)
 
-	show_tvdbid = show_tup[0][0]
+	print all_shows
 
-	print api.get_show_and_episodes(show_tvdbid)
+# 	show_tup = api.get_matching_shows(name)
 
-	break
+# 	print show_tup
+
+# 	show_tvdbid = show_tup[0][0]
+
+# 	print api.get_show_and_episodes(show_tvdbid)[1]
+
+# 	break
 
 
-# OPTIONS
-#	sub episodes AFTER the first one I have
-#	sub episodes BEFORE the latest one I have
+# # OPTIONS
+# #	sub episodes AFTER the first one I have
+# #	sub episodes BEFORE the latest one I have
 
-#	PREFIX for display
+# #	PREFIX for display
 
 
 
@@ -194,9 +219,30 @@ class Main:
 		'''
 
 		# get showid, name from JSON
-		# get local_episodes from JSON, process into local_episodes dict
-		# get TVDB ID from api
-		# get TVDB episodes, process into TVDB_episodes
+		# query get all_shows 
+		all_shows = T.json_query(QUERY_all_show_ids)
+
+		all_shows = all_shows.get('tvshows', [])
+
+		for show in all_shows:
+
+			name = show.get('title', '')
+			show_id = show.get('tvshowid', '')
+
+			self.show_dict[show_id] = {}
+			self.show_dict[show_id]['name'] = name
+
+			# get local_episodes from JSON, process into local_episodes dict
+			all_episodes = T.json_query(QUERY_all_episodes)
+			self.process_show_info(all_episodes, show_id)
+
+
+			# get TVDB ID from api
+			self.retrieve_TVDBID(show_id, name)
+
+			# get TVDB episodes, process into TVDB_episodes
+			self.retrieve_TVDB_info(show_id)
+
 
 		## once created ##
 
@@ -214,20 +260,22 @@ class Main:
 
 
 	# SHOW DICT
-	def process_show_info(self, local_show_dict, new_show = False):
-
-		if new_show:
-			''' retrieve the TVDBID '''
-			SHOWID = local_show_dict.get('showid','')
-			self.show_dict[SHOWID] = {}
-
-			if SHOWID:
-				self.show_dict[SHOWID]['TVDBID'] = self.retrieve_TVDBID(SHOWID)
-			else:
-				return
-
+	def process_show_info(self, local_show_dict, show_id):
 		''' create or update entry in local_show_dict '''
-		episodes = [(season, episode) for x in local_show_dict]
+
+		episodes = local_show_dict.get('episodes', [])
+
+		local_episodes = {}
+
+		for ep in episodes:
+			s    = ep.get('season', False)
+			e    = ep.get('episode', False)
+			epid = ep.get('episodeid', False)
+
+			if all([s, e, epid]):
+				local_episodes[(s, e)] = epid
+
+		self.show_dict[show_id]['local_episodes'] = local_episodes
 
 	# SHOW DICT
 	def retrieve_show_info(self, showid = None):
@@ -235,12 +283,76 @@ class Main:
 		pass
 
 	# SHOW DICT
-	def retrieve_TVDBID(self, showname):
+	def retrieve_TVDBID(self, local_id, showname):
 		''' use showname to get TVDBID '''
 
+		show_tup = self.TVDB.get_matching_shows(name)
+
+		try:
+			show_tvdbid = show_tup[0][0]
+
+			if show_tvdbid:
+
+				self.show_dict[local_id]['TVDBID'] = show_tvdbid
+
+				return True
+
+		except:
+			return None
+
+
 	# SHOW DICT
-	def retrieve_TVDB_info(self, TVDBID):
+	def retrieve_TVDB_info(self, local_id):
 		''' retrieve all episode info for a specific show '''
+
+		show = self.show_dict.get(local_id, False)
+
+		# if the show isnt found then abandon effort
+		if not show:
+			return
+
+		TVDBID = self.show_dict.get('TVDBID', False)
+
+		# the tvdbid doesnt exist, try to populate it
+		if not TVDBID:
+			show_name = self.show_dict.get('name', False)
+
+			# if there is no show name, then abandon the effort
+			if not show_name:
+
+				return
+
+			# get the tvdbid
+			self.retrieve_TVDBID(local_id, show_name)
+
+			# try populating the info again
+			self.retrieve_TVDB_info(local_id)
+
+		else:
+
+			# get the show info
+			info = self.TVDB.get_show_and_episodes(TVDBID)
+
+			# if info doesnt have episode info then abort
+			try:
+				# process the show info
+				if info:
+					self.process_tvdb_info(local_id, info[1])
+			except:
+				return
+
+	# SHOW DICT
+	def process_tvdb_info(self, local_id, info):
+		''' Converts the tvdb info into the show dict entry TVDB_episodes '''
+
+		TVDB_episodes = []
+		for episode in info:
+			e = episode.get('EpisodeNumber', False)
+			s = episode.get('SeasonNumber', False)
+			if all([e,s]):
+				TVDB_episodes.append((s, e))
+
+		self.show_dict[local_id] = TVDB_episodes
 
 	# SHOW DICT
 	def identify_missing(self, showid = None):
@@ -391,9 +503,14 @@ class Main:
 		''' runs immediately after a library update, 
 			writes the epid into each stub '''
 
+		pass
+
 	# STUBS
 	def request_library_update(self):
-		''' Request a library update of the specific addondata folder  '''
+		''' Request a library update of the specific addondata folder '''
+
+		QUERY_rescan['params']['directory'] = self.SUB_FOLDER
+		T.json_query(QUERY_rescan)
 
 	# LIBRARY
 	def remove_from_library(self, epid):
@@ -426,4 +543,6 @@ if ( __name__ == "__main__" ):
 		xbmc.sleep(10)
 
 	del Main
+
+
 
