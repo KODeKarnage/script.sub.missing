@@ -48,7 +48,7 @@ QUERY_all_episodes      = {"jsonrpc": "2.0",
 						"params": {
 							"properties": 
 								["season","episode","playcount","file"],
-							"tvshowid": "1"},
+							"tvshowid": "PLACEHOLDER"},
 						"id": "1"}
 
 QUERY_rescan			 = {"jsonrpc": "2.0",
@@ -58,6 +58,18 @@ QUERY_rescan			 = {"jsonrpc": "2.0",
 								"media": "video"},
 							"id": 1
 							}
+QUERY_clean				 = {"jsonrpc": "2.0",
+							"method": "VideoLibrary.Clean",
+							"id": 1
+							}							
+
+QUERY_change_name		 = {"jsonrpc": "2.0",
+							"method": "VideoLibrary.SetEpisodeDetails",
+							"params": {
+								"episodeid": "PLACEHOLDER",
+								"title ": "PLACEHOLDER"},
+							"id": 1
+							}	
 
 
 # query all all_shows 
@@ -133,7 +145,7 @@ class monitor(xbmc.Monitor):
 
 	def onDatabaseUpdate(self):
 		if video:
-			main.REFRESH()
+			main.onLibrary_scan_complete()
 
 	def onSettingsChanged(self):
 		MAIN.refresh_setings()
@@ -161,16 +173,16 @@ class Main:
 		# this will only be populated when stubs are slated for removal
 		self.remove_these = []
 
-		self.create_show_dict()
-
 		# create TVDB api
 		self.TVDB = THETVDBAPI()
+
+		self.create_show_dict()
 
 		# create database and settings monitor
 		self.monitor = monitor()
 
 	# MAIN 
-	def refresh(self):
+	def onLibrary_scan_complete(self):
 		'''
 		# check for any new shows
 			process any that are new
@@ -179,6 +191,17 @@ class Main:
 
 
 		'''
+
+		get all episodes
+		GET ALL STUB EPS IN THE LIBRARY
+
+		CHECK THE FILENAMES AGAINST SELF.remove_these
+		REMOVE THE ITEMS THAT ARE IN THAT LIST 
+
+		FOR ALL THE OTHERS, CHECK THE NAME IN THE LIBRARY, APPEND THE PREFIX IF NEEDED 
+
+		self.change_name_in_library(epid, new_name)
+
 
 	# MAIN
 	def retrieve_settings(self):
@@ -252,11 +275,12 @@ class Main:
 		# create the subsitutes
 		self.create_substitutes()
 
-		# remove_these stubs from the library
-		
+		# remove unneeded stubs from the library
+		T.json_query(QUERY_clean)
 
 		# call for a refresh of the SUB_FOLDER
 		self.request_library_update()
+
 
 
 	# SHOW DICT
@@ -278,11 +302,6 @@ class Main:
 		self.show_dict[show_id]['local_episodes'] = local_episodes
 
 	# SHOW DICT
-	def retrieve_show_info(self, showid = None):
-		''' retrieves the locally stored info '''
-		pass
-
-	# SHOW DICT
 	def retrieve_TVDBID(self, local_id, showname):
 		''' use showname to get TVDBID '''
 
@@ -299,7 +318,6 @@ class Main:
 
 		except:
 			return None
-
 
 	# SHOW DICT
 	def retrieve_TVDB_info(self, local_id):
@@ -445,6 +463,7 @@ class Main:
 	# STUBS
 	def destroy_folders(self, namelist):
 		''' destroys the folders in the namelist from the addondata directory '''	
+
 		for name in namelist:
 			path = os.path.join(self.SUB_FOLDER, name)
 
@@ -493,13 +512,11 @@ class Main:
 
 		stub = os.path.join(self.SUB_FOLDER, k, ep_name)
 
-		epid = ???????????????????????????????????????????
-
 		with open(stub, 'w') as f:
 			pass
 
 	# STUBS
-	def update_stubs(self):
+	def update_stub_epids(self):
 		''' runs immediately after a library update, 
 			writes the epid into each stub '''
 
@@ -513,25 +530,21 @@ class Main:
 		T.json_query(QUERY_rescan)
 
 	# LIBRARY
-	def remove_from_library(self, epid):
+	def clean_library(self):
 		''' removes the episode from the library '''
 
-		for filename in self.remove_these:
-			JSON REQUEST REMOVAL FROM LIBRARY
-
-		self.remove_these = []
+		T.json_query(QUERY_clean)
 
 	# LIBRARY		
-	def change_name_in_library(self):
+	def change_name_in_library(self, epid, new_name):
 		''' find all the stub items in the library and rename them using the 
 			user selected prefix self.sub_prefix '''
 
-		get all the episodes from the local dir 
-		where there is a filename with 'Missing_Sub_s'
-		and where the display name doesnt have the prefix
-		change the display name to have the prefix
+		QUERY_rescan['params']['episodeid'] = epid
+		QUERY_rescan['params']['title'] = new_name
 
-		also write the epid into the stub
+		T.json_query(QUERY_rescan)
+
 
 
 if ( __name__ == "__main__" ):
