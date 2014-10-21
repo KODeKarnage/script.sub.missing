@@ -71,6 +71,13 @@ QUERY_change_name		 = {"jsonrpc": "2.0",
 							"id": 1
 							}	
 
+QUERY_remove_episode	 = {"jsonrpc": "2.0",
+							"method": "VideoLibrary.RemoveEpisode",
+							"params": {
+								"episodeid": "PLACEHOLDER",
+							"id": 1
+							}	
+
 
 # query all all_shows 
 all_shows = T.json_query(QUERY_all_show_ids)
@@ -192,6 +199,43 @@ class Main:
 
 		'''
 
+		# get all episodes in the library
+		QUERY_all_episodes['params']['tvshowid'] = idx
+
+		all_episodes = T.json_query(QUERY_all_episodes)
+
+		all_episodes = all_episodes.get('episodes', [])
+
+		# cycle through the episodes
+		for episode in all_episodes:
+
+			title    = episode.get('title', '')
+			filename = episode.get('file', '')
+			epid     = episode.get('episodeid', '')
+
+			# if the name of the file starts with Missing_Sub_ AND the title doesnt start with 
+			# the prefix, the append the prefix to the title
+			if filename.startswith('Missing_Sub_'):
+				if not title.startswith(self.sub_prefix):
+
+					QUERY_change_name['params']['episodeid'] = epid
+					QUERY_change_name['params']['title'] = self.sub_prefix + title
+
+					T.json_query(QUERY_change_name)
+
+			# if the filename is in the list of the ones to remove, then remove them from
+			# the library
+
+			if filename in self.remove_these:
+
+				QUERY_remove_episode['params']['episodeid'] = epid 
+
+				T.json_query(QUERY_remove_episode)
+
+		# reset the contents of the remove list back to empty
+		self.remove_these = []
+
+
 		get all episodes
 		GET ALL STUB EPS IN THE LIBRARY
 
@@ -223,6 +267,9 @@ class Main:
 		# check if the SUB_FOLDER exists, create if it doesnt
 		if not os.path.exists(self.SUB_FOLDER):
 			os.mkdirs(self.SUB_FOLDER)
+
+
+		@@@@@@@@@@@@@@@ if the prefix has changed, then change all the items in the library with that prefix
 
 	# MAIN		
 	def threader(self, function, arguments):
@@ -534,17 +581,6 @@ class Main:
 		''' removes the episode from the library '''
 
 		T.json_query(QUERY_clean)
-
-	# LIBRARY		
-	def change_name_in_library(self, epid, new_name):
-		''' find all the stub items in the library and rename them using the 
-			user selected prefix self.sub_prefix '''
-
-		QUERY_rescan['params']['episodeid'] = epid
-		QUERY_rescan['params']['title'] = new_name
-
-		T.json_query(QUERY_rescan)
-
 
 
 if ( __name__ == "__main__" ):
