@@ -1,2 +1,2 @@
-Loose Files scans your video source folders and identifies the files that aren't in your library.
-A list of files is shown with XBMC so you can identify, rename, and move them. The list of files can also be saved to disk or emailed to you.
+Sub Missing puts placeholders in your library for episodes you are missing. This allows the information and art to be scraped and displayed in Kodi.
+The display titles of the missing episodes are prefixed with '-missing-'. Kodi will think these episodes are real.

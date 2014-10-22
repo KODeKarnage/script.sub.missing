@@ -11,7 +11,7 @@
     
     <extension point="xbmc.addon.metadata">
         <summary lang="en">Sub Missing</summary>
-        <description lang="en">Puts placeholders for missing episodes in the library so they get scraped.</description>
+        <description lang="en">Puts placeholders for missing episodes in the library so the information and art still gets scraped.</description>
         <language>en</language>
         <platform>all</platform>
         <license>GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007</license>
