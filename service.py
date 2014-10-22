@@ -20,50 +20,60 @@
 '''
 
 # Standard modules
-import sys
 import os
-
+import shutil
+import time
+import re
+import sys
+sys.path.append(xbmc.translatePath(os.path.join(xbmcaddon.Addon().getAddonInfo('path'), 'resources','lib')))
 
 # XBMC modules
 import xbmc
-import xbmcgui
 import xbmcaddon
+import xbmcgui
 
 # Custom modules
-sys.path.append(xbmc.translatePath(os.path.join(xbmcaddon.Addon().getAddonInfo('path'), 'resources','lib')))
 from thetvdbapi import TheTVDB
 import lazy_tools   as T
+log = T.logger()
 
-api = TheTVDB()
 
-QUERY_all_show_ids	    = {"jsonrpc": "2.0",
-						"method": "VideoLibrary.GetTVShows",
-						"params": {
-							"properties": 
-								["title"]},
-						"id": "1"}
+QUERY_all_show_ids	    = {
+							"jsonrpc": "2.0",
+							"method": "VideoLibrary.GetTVShows",
+							"params": {
+								"properties": 
+									["title"]},
+							"id": "1"
+							}
 
-QUERY_all_episodes      = {"jsonrpc": "2.0",
-						"method": "VideoLibrary.GetEpisodes",
-						"params": {
-							"properties": 
-								["season","episode","playcount","file"],
-							"tvshowid": "PLACEHOLDER"},
-						"id": "1"}
+QUERY_all_episodes      = {
+							"jsonrpc": "2.0",
+							"method": "VideoLibrary.GetEpisodes",
+							"params": {
+								"properties": 
+									["season","episode","playcount","file"],
+								"tvshowid": "PLACEHOLDER"},
+							"id": "1"
+							}
 
-QUERY_rescan			 = {"jsonrpc": "2.0",
+QUERY_rescan			 = {
+							"jsonrpc": "2.0",
 							"method": "VideoLibrary.Scan",
 							"params": {
 								"directory": "PLACEHOLDER",
 								"media": "video"},
 							"id": 1
 							}
-QUERY_clean				 = {"jsonrpc": "2.0",
+
+QUERY_clean				 = {
+							"jsonrpc": "2.0",
 							"method": "VideoLibrary.Clean",
 							"id": 1
 							}							
 
-QUERY_change_name		 = {"jsonrpc": "2.0",
+QUERY_change_name		 = {
+							"jsonrpc": "2.0",
 							"method": "VideoLibrary.SetEpisodeDetails",
 							"params": {
 								"episodeid": "PLACEHOLDER",
@@ -71,81 +81,31 @@ QUERY_change_name		 = {"jsonrpc": "2.0",
 							"id": 1
 							}	
 
-QUERY_remove_episode	 = {"jsonrpc": "2.0",
+QUERY_remove_episode	 = {
+							"jsonrpc": "2.0",
 							"method": "VideoLibrary.RemoveEpisode",
 							"params": {
 								"episodeid": "PLACEHOLDER",
 							"id": 1
 							}	
 
-
-# query all all_shows 
-all_shows = T.json_query(QUERY_all_show_ids)
-
-all_shows = all_shows.get('tvshows', [])
-
-print str(all_shows)
-
-for show in all_shows:
-
-	idx = show.get('tvshowid', '')
-
-	QUERY_all_episodes['params']['tvshowid'] = idx
-
-	all_shows = T.json_query(QUERY_all_episodes)
-
-	print all_shows
-
-# 	show_tup = api.get_matching_shows(name)
-
-# 	print show_tup
-
-# 	show_tvdbid = show_tup[0][0]
-
-# 	print api.get_show_and_episodes(show_tvdbid)[1]
-
-# 	break
+QUERY_filtered_episodes	= {	
+							"jsonrpc": "2.0",
+							"method": "VideoLibrary.GeEpisodes",
+							 "params": 	{
+							 	"tvshowid": "PLACEHOLDER"
+								"filter": 	{
+									"operator": "contains",
+									"field": "title",
+									"value": "PLACEHOLDER"
+											},
+								"properties": ["title", "file"]
+										},
+							"id": 1
+							}
 
 
-# # OPTIONS
-# #	sub episodes AFTER the first one I have
-# #	sub episodes BEFORE the latest one I have
-
-# #	PREFIX for display
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# XBMC modules
-import xbmc
-import xbmcaddon
-
-# Standard modules
-import os
-import shutil
-import time
-import re
-import sys
-
-# Custom modules
-import lazytools as T
-log = T.logger()
-
-
-
-
-class monitor(xbmc.Monitor):
+class Monitor(xbmc.Monitor):
 
 	def __init__(self, main):
 		self.main = main
@@ -155,7 +115,7 @@ class monitor(xbmc.Monitor):
 			main.onLibrary_scan_complete()
 
 	def onSettingsChanged(self):
-		MAIN.refresh_setings()
+		MAIN.retrieve_settings()
 
 
 class Main:
@@ -180,29 +140,31 @@ class Main:
 		# this will only be populated when stubs are slated for removal
 		self.remove_these = []
 
+		# retrieve the addon settings
+		self.retrieve_settings()
+
 		# create TVDB api
 		self.TVDB = THETVDBAPI()
 
 		self.create_show_dict()
 
 		# create database and settings monitor
-		self.monitor = monitor()
+		self.monitor = Monitor()
+
 
 	# MAIN 
 	def onLibrary_scan_complete(self):
-		'''
-		# check for any new shows
-			process any that are new
-
-		# check all stubs to see if they have epid, if not then add them
-
-
+		''' Gets all the episodes in the library that have 'Missing_Sub_' in the
+		filename and adds the prefix to the title (if needed) or removes the entry
+		if the episode in on the removal list 
 		'''
 
 		# get all episodes in the library
-		QUERY_all_episodes['params']['tvshowid'] = idx
+		QUERY_filtered_episodes['params']['tvshowid'] = -1
+		QUERY_filtered_episodes['params']['filter']['field'] = "file"
+		QUERY_filtered_episodes['params']['filter']['value'] = 'Missing_Sub_'
 
-		all_episodes = T.json_query(QUERY_all_episodes)
+		all_episodes = T.json_query(QUERY_filtered_episodes)
 
 		all_episodes = all_episodes.get('episodes', [])
 
@@ -213,15 +175,13 @@ class Main:
 			filename = episode.get('file', '')
 			epid     = episode.get('episodeid', '')
 
-			# if the name of the file starts with Missing_Sub_ AND the title doesnt start with 
-			# the prefix, the append the prefix to the title
-			if filename.startswith('Missing_Sub_'):
-				if not title.startswith(self.sub_prefix):
+			# if the title doesnt start with the prefix, then append the prefix to the title
+			if not title.startswith(self.sub_prefix):
 
-					QUERY_change_name['params']['episodeid'] = epid
-					QUERY_change_name['params']['title'] = self.sub_prefix + title
+				QUERY_change_name['params']['episodeid'] = epid
+				QUERY_change_name['params']['title'] = self.sub_prefix + title
 
-					T.json_query(QUERY_change_name)
+				T.json_query(QUERY_change_name)
 
 			# if the filename is in the list of the ones to remove, then remove them from
 			# the library
@@ -236,44 +196,81 @@ class Main:
 		self.remove_these = []
 
 
-		get all episodes
-		GET ALL STUB EPS IN THE LIBRARY
-
-		CHECK THE FILENAMES AGAINST SELF.remove_these
-		REMOVE THE ITEMS THAT ARE IN THAT LIST 
-
-		FOR ALL THE OTHERS, CHECK THE NAME IN THE LIBRARY, APPEND THE PREFIX IF NEEDED 
-
-		self.change_name_in_library(epid, new_name)
-
-
 	# MAIN
 	def retrieve_settings(self):
+		''' Retrieves the settings for the addon '''
 		
 		__addon__        = xbmcaddon.Addon('script.missing.tv')
 		__setting__      = __addon__.getSetting
 
 
-		self.sub_location = __setting__('sub_location')
-		self.sub_prefix   = __setting__('prefix')
+		self.new_sub_location = __setting__('sub_location')
+		self.new_sub_prefix   = __setting__('prefix')
 
-		if self.sub_location == 'default':
+		# if the sublocation is the default location
+		# then set the folder location to the addon data folder
+		if self.new_sub_location == 'default':
 			self.ADDON_DATA_FOLDER = xbmc.translatePath('special://userdata')
 			self.SUB_FOLDER = os.path.join(self.ADDON_DATA_FOLDER, 'Missing_TV')
 		else:
 			self.SUB_FOLDER = self.sub_location
 
-
 		# check if the SUB_FOLDER exists, create if it doesnt
 		if not os.path.exists(self.SUB_FOLDER):
 			os.mkdirs(self.SUB_FOLDER)
 
+		# presume the variable self.sub_prefix exists, and check the new prefix against
+		# the existing one, if they are different then rename all the files in the library
+		# that are using the old prefix
+		try:
+			if self.sub_prefix != self.new_sub_prefix:
 
-		@@@@@@@@@@@@@@@ if the prefix has changed, then change all the items in the library with that prefix
+				self.change_prefix(self.new_sub_prefix, self.sub_prefix)
+		
+		except:
+			# if the variable self.sub_prefix doesnt exist, the create it and
+			# set it to the new prefix
+			# this should only happen on the first run
+
+			self.sub_prefix = self.new_sub_prefix
+
+
+	def change_prefix(new_prefix, old_prefix = ''):
+		''' Cycles through the names of the episodes in the library and 
+			changes the prefix used in the titles '''
+
+		# get all episodes in the library
+		QUERY_filtered_episodes['params']['tvshowid'] = -1
+
+		QUERY_filtered_episodes['params']['filter']['value'] = old_prefix
+
+		QUERY_filtered_episodes['params']['filter']['field'] = "title"
+
+		all_episodes = T.json_query(QUERY_filtered_episodes)
+
+		all_episodes = all_episodes.get('episodes', [])
+
+		# cycle through the episodes change the prefix when it is found
+		for episode in all_episodes:
+
+			title    = episode.get('title', '')
+			epid     = episode.get('episodeid', '')
+
+			if old_prefix:
+				if title.startswith(old_prefix):
+
+					raw_title = title[len(old_prefix):]
+
+				QUERY_change_name['params']['episodeid'] = epid
+				QUERY_change_name['params']['title'] = new_prefix + raw_title
+
+				T.json_query(QUERY_change_name)
+
 
 	# MAIN		
 	def threader(self, function, arguments):
 		''' creates x number of threads to process the arguments in the function '''
+		pass
 
 	# SHOW DICT
 	def create_show_dict(self, showid = None):
@@ -313,7 +310,6 @@ class Main:
 			# get TVDB episodes, process into TVDB_episodes
 			self.retrieve_TVDB_info(show_id)
 
-
 		## once created ##
 
 		# find the missing episodes
@@ -327,8 +323,6 @@ class Main:
 
 		# call for a refresh of the SUB_FOLDER
 		self.request_library_update()
-
-
 
 	# SHOW DICT
 	def process_show_info(self, local_show_dict, show_id):
@@ -562,14 +556,7 @@ class Main:
 		with open(stub, 'w') as f:
 			pass
 
-	# STUBS
-	def update_stub_epids(self):
-		''' runs immediately after a library update, 
-			writes the epid into each stub '''
-
-		pass
-
-	# STUBS
+	# LIBRARY
 	def request_library_update(self):
 		''' Request a library update of the specific addondata folder '''
 
