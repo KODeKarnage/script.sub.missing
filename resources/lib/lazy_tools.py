@@ -18,9 +18,9 @@ import sys
 sys.path.append(xbmc.translatePath(os.path.join(xbmcaddon.Addon().getAddonInfo('path'), 'resources','lib')))
 
 # LAZYTV modules
-# import lazy_classes as C
-# import lazy_queries as Q
-# import lazy_tools   as T
+import lazy_classes as C
+import lazy_queries as Q
+import lazy_tools   as T
 
 
 
